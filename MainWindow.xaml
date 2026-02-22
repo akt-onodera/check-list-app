@@ -11,37 +11,57 @@
     WindowStartupLocation="Manual">
 
     <Window.Resources>
+        <!--  Material Design 3 (approx) color scheme tokens (WPF-friendly)  -->
+        <!--  Primary seed: #449890  -->
         <Color x:Key="PrimaryColor">#FF449890</Color>
         <Color x:Key="OnPrimaryColor">#FFFFFFFF</Color>
 
+        <!--  Containers (MD3-like)  -->
+        <Color x:Key="PrimaryContainerColor">#FFBEECE6</Color>
+        <Color x:Key="OnPrimaryContainerColor">#FF0A2F2B</Color>
+
+        <!--  Surface / text (user preference #3D3A3A respected for on-surface)  -->
         <Color x:Key="SurfaceColor">#FFFFFFFF</Color>
         <Color x:Key="OnSurfaceColor">#FF3D3A3A</Color>
+
+        <!--  Variant / subtle  -->
+        <Color x:Key="SurfaceVariantColor">#FFE6E8E8</Color>
+        <Color x:Key="OnSurfaceVariantColor">#FF4E4A4A</Color>
 
         <Color x:Key="SubtleTextColor">#FF4E4A4A</Color>
         <Color x:Key="OutlineColor">#FF7B7474</Color>
         <Color x:Key="DividerColor">#FFE3E0E0</Color>
 
-        <Color x:Key="ChipBlueContainerColor">#FFCDEEE9</Color>
-        <Color x:Key="ChipBlueOnContainerColor">#FF134742</Color>
+        <!--  Status chips (MD3 container-style)  -->
+        <Color x:Key="ChipBlueContainerColor">#FFBEECE6</Color>
+        <Color x:Key="ChipBlueOnContainerColor">#FF0A2F2B</Color>
 
-        <Color x:Key="ChipYellowContainerColor">#FFFFE8A3</Color>
+        <Color x:Key="ChipYellowContainerColor">#FFFFE08A</Color>
         <Color x:Key="ChipYellowOnContainerColor">#FF2A2200</Color>
 
         <Color x:Key="ChipRedContainerColor">#FFFFDAD6</Color>
         <Color x:Key="ChipRedOnContainerColor">#FF410002</Color>
 
         <Color x:Key="ChipStoppedContainerColor">#FFE6E8E8</Color>
-        <Color x:Key="ChipStoppedOnContainerColor">#FF3D3A3A</Color>
+        <Color x:Key="ChipStoppedOnContainerColor">#FF4E4A4A</Color>
 
+        <!--  Brushes  -->
         <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
         <SolidColorBrush x:Key="OnPrimaryBrush" Color="{StaticResource OnPrimaryColor}" />
+        <SolidColorBrush x:Key="PrimaryContainerBrush" Color="{StaticResource PrimaryContainerColor}" />
+        <SolidColorBrush x:Key="OnPrimaryContainerBrush" Color="{StaticResource OnPrimaryContainerColor}" />
+
         <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
         <SolidColorBrush x:Key="OnSurfaceBrush" Color="{StaticResource OnSurfaceColor}" />
+        <SolidColorBrush x:Key="SurfaceVariantBrush" Color="{StaticResource SurfaceVariantColor}" />
+        <SolidColorBrush x:Key="OnSurfaceVariantBrush" Color="{StaticResource OnSurfaceVariantColor}" />
+
         <SolidColorBrush x:Key="SubtleTextBrush" Color="{StaticResource SubtleTextColor}" />
         <SolidColorBrush x:Key="OutlineBrush" Color="{StaticResource OutlineColor}" />
         <SolidColorBrush x:Key="DividerBrush" Color="{StaticResource DividerColor}" />
 
-        <SolidColorBrush x:Key="DropBackgroundBrush" Color="#FFE7F6F3" />
+        <!--  Dropdown menu (surface variant + state layers)  -->
+        <SolidColorBrush x:Key="DropBackgroundBrush" Color="{StaticResource SurfaceVariantColor}" />
         <SolidColorBrush x:Key="DropHoverBrush" Color="#FFD8EFEA" />
         <SolidColorBrush x:Key="DropSelectedBrush" Color="#FFCAE8E2" />
         <SolidColorBrush x:Key="DropSeparatorBrush" Color="#1A000000" />
@@ -55,6 +75,7 @@
         <SolidColorBrush x:Key="ChipStoppedBackgroundBrush" Color="{StaticResource ChipStoppedContainerColor}" />
         <SolidColorBrush x:Key="ChipStoppedForegroundBrush" Color="{StaticResource ChipStoppedOnContainerColor}" />
 
+        <!--  Header  -->
         <Style x:Key="HeaderBarStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
             <Setter Property="Padding" Value="8,0" />
@@ -108,13 +129,14 @@
 
         <Style x:Key="HeaderTitleStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource OnPrimaryBrush}" />
-            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontSize" Value="20" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
 
+        <!--  Cards  -->
         <Style x:Key="TopCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="CornerRadius" Value="14" />
@@ -129,29 +151,6 @@
                         ShadowDepth="2" />
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <Style x:Key="ChipContainerStyle" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="10,6" />
-            <Setter Property="Background" Value="{StaticResource ChipStoppedBackgroundBrush}" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,0,6" />
-        </Style>
-
-        <Style x:Key="ChipTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource ChipStoppedForegroundBrush}" />
-        </Style>
-
-        <Style x:Key="StopwatchTimeStyle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
-            <Setter Property="FontSize" Value="24" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,10,0" />
         </Style>
 
         <Style x:Key="CardBorderStyle" TargetType="Border">
@@ -175,9 +174,34 @@
             <Setter Property="Margin" Value="6,0,6,0" />
         </Style>
 
+        <!--  Chip  -->
+        <Style x:Key="ChipContainerStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Background" Value="{StaticResource ChipStoppedBackgroundBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+
+        <Style x:Key="ChipTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource ChipStoppedForegroundBrush}" />
+        </Style>
+
+        <Style x:Key="StopwatchTimeStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+        </Style>
+
+        <!--  Sections  -->
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,10,0,6" />
         </Style>
@@ -188,6 +212,7 @@
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
 
+        <!--  ComboBox item: full-width hover + text left padding  -->
         <Style x:Key="ComboBoxItemStyle" TargetType="ComboBoxItem">
             <Setter Property="MinHeight" Value="44" />
             <Setter Property="Padding" Value="0,14,0,14" />
@@ -233,7 +258,7 @@
             <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
             <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="MinHeight" Value="50" />
             <Setter Property="Margin" Value="0,0,0,10" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource ComboBoxItemStyle}" />
@@ -364,13 +389,14 @@
             </Setter>
         </Style>
 
+        <!--  TextBox  -->
         <Style x:Key="TextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
             <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,10" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="MinHeight" Value="46" />
             <Setter Property="Margin" Value="0,0,0,10" />
             <Setter Property="Template">
@@ -426,11 +452,12 @@
             </Setter>
         </Style>
 
+        <!--  Buttons  -->
         <Style x:Key="FilledButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
             <Setter Property="Foreground" Value="{StaticResource OnPrimaryBrush}" />
             <Setter Property="Padding" Value="12,7" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
@@ -469,7 +496,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
             <Setter Property="Padding" Value="11,7" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
@@ -504,6 +531,7 @@
             </Setter>
         </Style>
 
+        <!--  Tabs (grey divider no margin; green underline uses full tab width)  -->
         <Style TargetType="TabControl">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -584,6 +612,7 @@
             </Setter>
         </Style>
 
+        <!--  Drawer  -->
         <Style x:Key="DrawerPanelStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="Width" Value="250" />
