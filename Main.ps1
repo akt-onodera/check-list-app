@@ -4,9 +4,9 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-$script:IsBulkUpdateInProgress = $false
+$script:bulk = $false
 
-$defaultFormState = @{
+$def = @{
   FirstTabDropdown1         = ""
   FirstTabDropdown2         = ""
   FirstTabDropdown3         = ""
@@ -31,146 +31,116 @@ $defaultFormState = @{
   SecondTabDropdown10       = ""
 }
 
-$script:currentFormState = @{}
-foreach ($stateKey in $defaultFormState.Keys) { $script:currentFormState[$stateKey] = $defaultFormState[$stateKey] }
+$script:st = @{}
+foreach ($k in $def.Keys) { $script:st[$k] = $def[$k] }
 
-function Get-ComboBoxSelectedText {
-  param([Parameter(Mandatory)] [System.Windows.Controls.ComboBox] $comboBox)
+$script:sel = @{ d1 = ""; d2 = ""; d3 = "" }
 
-  if ($comboBox.SelectedItem -is [System.Windows.Controls.ComboBoxItem]) {
-    return [string]$comboBox.SelectedItem.Content
-  }
-  return ""
+function Get-CbText {
+  param([Parameter(Mandatory)][System.Windows.Controls.ComboBox]$cb)
+  if ($cb.SelectedItem -is [System.Windows.Controls.ComboBoxItem]) { return [string]$cb.SelectedItem.Content }
+  ""
 }
 
-function Set-ComboBoxSelectedByText {
+function Set-CbByText {
   param(
-    [Parameter(Mandatory)] [System.Windows.Controls.ComboBox] $comboBox,
-    [AllowEmptyString()] [string] $text = ""
+    [Parameter(Mandatory)][System.Windows.Controls.ComboBox]$cb,
+    [AllowEmptyString()][string]$t = ""
+  )
+  if ([string]::IsNullOrEmpty($t)) { $cb.SelectedIndex = -1; $cb.SelectedItem = $null; return }
+  foreach ($it in $cb.Items) {
+    if ($it -is [System.Windows.Controls.ComboBoxItem] -and [string]$it.Content -eq $t) { $cb.SelectedItem = $it; return }
+  }
+  $cb.SelectedIndex = -1
+  $cb.SelectedItem = $null
+}
+
+function Set-CbItems {
+  param(
+    [Parameter(Mandatory)][System.Windows.Controls.ComboBox]$cb,
+    [Parameter(Mandatory)]$items,
+    [AllowEmptyString()][string]$keep = ""
   )
 
-  if ([string]::IsNullOrEmpty($text)) {
-    $comboBox.SelectedIndex = -1
-    $comboBox.SelectedItem = $null
-    return
-  }
+  $arr = @()
+  if ($items -is [string]) { $arr = @([string]$items) }
+  elseif ($items -is [System.Collections.IEnumerable]) { foreach ($v in $items) { $arr += [string]$v } }
+  else { $arr = @([string]$items) }
 
-  foreach ($item in $comboBox.Items) {
-    if ($item -is [System.Windows.Controls.ComboBoxItem]) {
-      if ([string]$item.Content -eq $text) {
-        $comboBox.SelectedItem = $item
-        return
-      }
-    }
+  $cb.Items.Clear()
+  foreach ($s in $arr) {
+    $cbi = New-Object System.Windows.Controls.ComboBoxItem
+    $cbi.Content = $s
+    $cb.Items.Add($cbi) | Out-Null
   }
-
-  $comboBox.SelectedIndex = -1
-  $comboBox.SelectedItem = $null
+  Set-CbByText -cb $cb -t $keep
 }
 
-function Set-ComboBoxItems {
-  param(
-    [Parameter(Mandatory)] [System.Windows.Controls.ComboBox] $comboBox,
-    [Parameter(Mandatory)] $items,
-    [AllowEmptyString()] [string] $preserveSelectedText = ""
-  )
-
-  $itemTexts = @()
-  if ($items -is [string]) {
-    $itemTexts = @([string]$items)
-  }
-  elseif ($items -is [System.Collections.IEnumerable]) {
-    foreach ($value in $items) { $itemTexts += [string]$value }
-  }
-  else {
-    $itemTexts = @([string]$items)
-  }
-
-  $comboBox.Items.Clear()
-  foreach ($text in $itemTexts) {
-    $comboBoxItem = New-Object System.Windows.Controls.ComboBoxItem
-    $comboBoxItem.Content = $text
-    $comboBox.Items.Add($comboBoxItem) | Out-Null
-  }
-
-  Set-ComboBoxSelectedByText -comboBox $comboBox -text $preserveSelectedText
+function Focus-Next {
+  param([Parameter(Mandatory)][System.Windows.DependencyObject]$from)
+  $req = New-Object System.Windows.Input.TraversalRequest([System.Windows.Input.FocusNavigationDirection]::Next)
+  $null = $from.MoveFocus($req)
 }
 
-function Focus-NextInputControl {
-  param([Parameter(Mandatory)] [System.Windows.DependencyObject] $fromControl)
+function Attach-EnterNext {
+  param([Parameter(Mandatory)]$c)
 
-  $traversalRequest = New-Object System.Windows.Input.TraversalRequest([System.Windows.Input.FocusNavigationDirection]::Next)
-  $null = $fromControl.MoveFocus($traversalRequest)
-}
-
-function Attach-EnterKeyToMoveNext {
-  param([Parameter(Mandatory)] $control)
-
-  if ($control -is [System.Windows.Controls.TextBox]) {
-    $control.AcceptsReturn = $false
-    $control.Add_PreviewKeyDown({
-        if ($_.Key -eq [System.Windows.Input.Key]::Enter) {
-          $_.Handled = $true
-          Focus-NextInputControl -fromControl $this
-        }
+  if ($c -is [System.Windows.Controls.TextBox]) {
+    $c.AcceptsReturn = $false
+    $c.Add_PreviewKeyDown({
+        if ($_.Key -eq [System.Windows.Input.Key]::Enter) { $_.Handled = $true; Focus-Next -from $this }
       }) | Out-Null
     return
   }
 
-  if ($control -is [System.Windows.Controls.ComboBox]) {
-    $control.Add_PreviewKeyDown({
-        if ($_.Key -eq [System.Windows.Input.Key]::Enter -and -not $this.IsDropDownOpen) {
-          $_.Handled = $true
-          Focus-NextInputControl -fromControl $this
-        }
+  if ($c -is [System.Windows.Controls.ComboBox]) {
+    $c.Add_PreviewKeyDown({
+        if ($_.Key -eq [System.Windows.Input.Key]::Enter -and -not $this.IsDropDownOpen) { $_.Handled = $true; Focus-Next -from $this }
       }) | Out-Null
-    return
   }
 }
 
-function Set-WindowBottomLeft {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
-
+function Set-BottomLeft {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
   try {
-    $workArea = [System.Windows.SystemParameters]::WorkArea
-    $window.Left = $workArea.Left + 10
-    $window.Top = $workArea.Bottom - $window.ActualHeight - 10
+    $wa = [System.Windows.SystemParameters]::WorkArea
+    $w.Left = $wa.Left + 10
+    $w.Top = $wa.Bottom - $w.ActualHeight - 10
   }
   catch {}
 }
 
-function Format-ElapsedTime {
-  param([Parameter(Mandatory)] [TimeSpan] $elapsedTime)
-  "{0:00}:{1:00}:{2:00}" -f [int]$elapsedTime.TotalHours, $elapsedTime.Minutes, $elapsedTime.Seconds
+function Fmt-Time {
+  param([Parameter(Mandatory)][TimeSpan]$ts)
+  "{0:00}:{1:00}:{2:00}" -f [int]$ts.TotalHours, $ts.Minutes, $ts.Seconds
 }
 
-$formFieldDefinitions = @(
-  @{ ControlName = "FirstTabDropdown1"; StateKey = "FirstTabDropdown1"; ControlType = "ComboBox" }
-  @{ ControlName = "FirstTabDropdown2"; StateKey = "FirstTabDropdown2"; ControlType = "ComboBox" }
-  @{ ControlName = "FirstTabDropdown3"; StateKey = "FirstTabDropdown3"; ControlType = "ComboBox" }
-  @{ ControlName = "FirstTabDropdown4"; StateKey = "FirstTabDropdown4"; ControlType = "ComboBox" }
-  @{ ControlName = "FirstTabTextBox1"; StateKey = "FirstTabTextBox1"; ControlType = "TextBox" }
-  @{ ControlName = "FirstTabDropdown5"; StateKey = "FirstTabDropdown5"; ControlType = "ComboBox" }
-  @{ ControlName = "FirstTabTextBox2"; StateKey = "FirstTabTextBox2"; ControlType = "TextBox" }
-  @{ ControlName = "FirstTabTextBox3"; StateKey = "FirstTabTextBox3"; ControlType = "TextBox" }
+$defs = @(
+  @{ n = "FirstTabDropdown1"; k = "FirstTabDropdown1"; t = "cb" }
+  @{ n = "FirstTabDropdown2"; k = "FirstTabDropdown2"; t = "cb" }
+  @{ n = "FirstTabDropdown3"; k = "FirstTabDropdown3"; t = "cb" }
+  @{ n = "FirstTabDropdown4"; k = "FirstTabDropdown4"; t = "cb" }
+  @{ n = "FirstTabTextBox1"; k = "FirstTabTextBox1"; t = "tb" }
+  @{ n = "FirstTabDropdown5"; k = "FirstTabDropdown5"; t = "cb" }
+  @{ n = "FirstTabTextBox2"; k = "FirstTabTextBox2"; t = "tb" }
+  @{ n = "FirstTabTextBox3"; k = "FirstTabTextBox3"; t = "tb" }
 
-  @{ ControlName = "SecondTabDropdown1Special"; StateKey = "SecondTabDropdown1Special"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabTextBoxSpecial1"; StateKey = "SecondTabTextBoxSpecial1"; ControlType = "TextBox" }
+  @{ n = "SecondTabDropdown1Special"; k = "SecondTabDropdown1Special"; t = "cb" }
+  @{ n = "SecondTabTextBoxSpecial1"; k = "SecondTabTextBoxSpecial1"; t = "tb" }
 
-  @{ ControlName = "SecondTabDropdown2"; StateKey = "SecondTabDropdown2"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown3"; StateKey = "SecondTabDropdown3"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown4"; StateKey = "SecondTabDropdown4"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown5"; StateKey = "SecondTabDropdown5"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabTextBox1"; StateKey = "SecondTabTextBox1"; ControlType = "TextBox" }
-  @{ ControlName = "SecondTabDropdown6"; StateKey = "SecondTabDropdown6"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown7"; StateKey = "SecondTabDropdown7"; ControlType = "ComboBox" }
-
-  @{ ControlName = "SecondTabDropdown8"; StateKey = "SecondTabDropdown8"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown9"; StateKey = "SecondTabDropdown9"; ControlType = "ComboBox" }
-  @{ ControlName = "SecondTabDropdown10"; StateKey = "SecondTabDropdown10"; ControlType = "ComboBox" }
+  @{ n = "SecondTabDropdown2"; k = "SecondTabDropdown2"; t = "cb" }
+  @{ n = "SecondTabDropdown3"; k = "SecondTabDropdown3"; t = "cb" }
+  @{ n = "SecondTabDropdown4"; k = "SecondTabDropdown4"; t = "cb" }
+  @{ n = "SecondTabDropdown5"; k = "SecondTabDropdown5"; t = "cb" }
+  @{ n = "SecondTabTextBox1"; k = "SecondTabTextBox1"; t = "tb" }
+  @{ n = "SecondTabDropdown6"; k = "SecondTabDropdown6"; t = "cb" }
+  @{ n = "SecondTabDropdown7"; k = "SecondTabDropdown7"; t = "cb" }
+  @{ n = "SecondTabDropdown8"; k = "SecondTabDropdown8"; t = "cb" }
+  @{ n = "SecondTabDropdown9"; k = "SecondTabDropdown9"; t = "cb" }
+  @{ n = "SecondTabDropdown10"; k = "SecondTabDropdown10"; t = "cb" }
 )
 
-$comboBoxOptions = @{
+$opt = @{
   FirstTabDropdown1         = @("選択肢A", "選択肢B")
   FirstTabDropdown2         = @("選択肢A", "選択肢B")
   FirstTabDropdown3         = @("選択肢A", "選択肢B")
@@ -185,338 +155,381 @@ $comboBoxOptions = @{
   SecondTabDropdown5        = @("選択肢A", "選択肢B")
   SecondTabDropdown6        = @("選択肢A", "選択肢B")
   SecondTabDropdown7        = @("選択肢A", "選択肢B")
-
   SecondTabDropdown8        = @("選択肢A", "選択肢B")
   SecondTabDropdown9        = @("選択肢A", "選択肢B")
   SecondTabDropdown10       = @("選択肢A", "選択肢B")
 }
 
-$windowXamlPath = Join-Path -Path $PSScriptRoot -ChildPath "MainWindow.xaml"
-$windowXamlText = Get-Content -Path $windowXamlPath -Raw -Encoding UTF8
-$xmlReader = New-Object System.Xml.XmlNodeReader ([xml]$windowXamlText)
-$mainWindow = [Windows.Markup.XamlReader]::Load($xmlReader)
+$script:dir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$xaml = Join-Path $script:dir "MainWindow.xaml"
+$script:w = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader ([xml](Get-Content -Raw -Encoding UTF8 $xaml))))
 
-function Update-SpecialAddressTextBoxVisibility {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
+function Upd-SpecialTb {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
+  $cb = [System.Windows.Controls.ComboBox]$w.FindName("SecondTabDropdown1Special")
+  $tb = [System.Windows.Controls.TextBox]$w.FindName("SecondTabTextBoxSpecial1")
+  $t = if ($cb) { Get-CbText -cb $cb } else { "" }
 
-  $specialDropdown = [System.Windows.Controls.ComboBox]$window.FindName("SecondTabDropdown1Special")
-  $specialTextBox = [System.Windows.Controls.TextBox]$window.FindName("SecondTabTextBoxSpecial1")
-  $selectedText = Get-ComboBoxSelectedText -comboBox $specialDropdown
-
-  if ($selectedText -eq "選択肢C") {
-    $specialTextBox.Visibility = "Visible"
-    $window.Dispatcher.BeginInvoke([Action] { try { $specialTextBox.Focus() | Out-Null; $specialTextBox.SelectAll() } catch {} }) | Out-Null
+  if ($t -eq "選択肢C") {
+    $tb.Visibility = "Visible"
+    $w.Dispatcher.BeginInvoke([Action] { try { $tb.Focus() | Out-Null; $tb.SelectAll() } catch {} }) | Out-Null
   }
   else {
-    $specialTextBox.Visibility = "Collapsed"
-    if ($specialTextBox.Text -ne "") { $specialTextBox.Text = "" }
+    $tb.Visibility = "Collapsed"
+    if ($tb.Text -ne "") { $tb.Text = "" }
   }
 }
 
-function Apply-ComboBoxOptionsToWindow {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
-
-  foreach ($controlName in $comboBoxOptions.Keys) {
-    $comboBox = [System.Windows.Controls.ComboBox]$window.FindName($controlName)
-    if ($comboBox) {
-      $preservedText = Get-ComboBoxSelectedText -comboBox $comboBox
-      Set-ComboBoxItems -comboBox $comboBox -items @($comboBoxOptions[$controlName]) -preserveSelectedText $preservedText
+function Apply-Opts {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
+  foreach ($n in $opt.Keys) {
+    $cb = [System.Windows.Controls.ComboBox]$w.FindName($n)
+    if ($cb) {
+      $keep = Get-CbText -cb $cb
+      Set-CbItems -cb $cb -items @($opt[$n]) -keep $keep
     }
   }
 }
 
-function Sync-UserInterfaceFromState {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
-
-  $script:IsBulkUpdateInProgress = $true
+function Sync-Ui {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
+  $script:bulk = $true
   try {
-    Apply-ComboBoxOptionsToWindow -window $window
-    foreach ($definition in $formFieldDefinitions) {
-      $control = $window.FindName($definition.ControlName)
-      $value = [string]$script:currentFormState[$definition.StateKey]
-      if ($definition.ControlType -eq "ComboBox") {
-        Set-ComboBoxSelectedByText -comboBox $control -text $value
-      }
-      else {
-        $control.Text = $value
-      }
+    Apply-Opts -w $w
+    foreach ($d in $defs) {
+      $c = $w.FindName($d.n)
+      $v = [string]$script:st[$d.k]
+      if ($d.t -eq "cb") { Set-CbByText -cb $c -t $v } else { $c.Text = $v }
     }
-    Update-SpecialAddressTextBoxVisibility -window $window
+    Upd-SpecialTb -w $w
   }
-  finally {
-    $script:IsBulkUpdateInProgress = $false
-  }
+  finally { $script:bulk = $false }
 }
 
-function Sync-StateFromUserInterface {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
-
-  if ($script:IsBulkUpdateInProgress) { return }
-
-  foreach ($definition in $formFieldDefinitions) {
-    $control = $window.FindName($definition.ControlName)
-    if ($definition.ControlType -eq "ComboBox") {
-      $script:currentFormState[$definition.StateKey] = Get-ComboBoxSelectedText -comboBox $control
-    }
-    else {
-      $script:currentFormState[$definition.StateKey] = $control.Text
-    }
+function Sync-St {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
+  if ($script:bulk) { return }
+  foreach ($d in $defs) {
+    $c = $w.FindName($d.n)
+    if ($d.t -eq "cb") { $script:st[$d.k] = Get-CbText -cb $c } else { $script:st[$d.k] = $c.Text }
   }
-
-  if ($script:currentFormState["SecondTabDropdown1Special"] -ne "選択肢C") {
-    $script:currentFormState["SecondTabTextBoxSpecial1"] = ""
-  }
+  if ($script:st["SecondTabDropdown1Special"] -ne "選択肢C") { $script:st["SecondTabTextBoxSpecial1"] = "" }
 }
 
-function Clear-AllInputs {
-  param([Parameter(Mandatory)] [System.Windows.Window] $window)
-
-  $script:IsBulkUpdateInProgress = $true
+function Clear-All {
+  param([Parameter(Mandatory)][System.Windows.Window]$w)
+  $script:bulk = $true
   try {
-    foreach ($key in $defaultFormState.Keys) { $script:currentFormState[$key] = "" }
-
-    foreach ($definition in $formFieldDefinitions) {
-      $control = $window.FindName($definition.ControlName)
-      if ($definition.ControlType -eq "ComboBox") {
-        $control.SelectedIndex = -1
-        $control.SelectedItem = $null
-      }
-      else {
-        $control.Text = ""
-      }
+    foreach ($k in $def.Keys) { $script:st[$k] = "" }
+    foreach ($d in $defs) {
+      $c = $w.FindName($d.n)
+      if ($d.t -eq "cb") { $c.SelectedIndex = -1; $c.SelectedItem = $null } else { $c.Text = "" }
     }
-    Update-SpecialAddressTextBoxVisibility -window $window
+    Upd-SpecialTb -w $w
   }
-  finally {
-    $script:IsBulkUpdateInProgress = $false
+  finally { $script:bulk = $false }
+}
+
+function Set-ModalCbStyle {
+  param([Parameter(Mandatory)][System.Windows.Controls.ComboBox]$cb, [Parameter(Mandatory)][bool]$ok)
+  if ($ok) { $cb.Style = $script:w.FindResource("UnifiedComboBoxStyle") }
+  else { $cb.Style = $script:w.FindResource("UnifiedComboBoxErrorStyle") }
+}
+
+function Hide-Modal {
+  $ov = [System.Windows.Controls.Grid]$script:w.FindName("StartupModalOverlay")
+  if ($ov) { $ov.Visibility = "Collapsed" }
+}
+
+$script:modalInit = $true
+$script:modalTouched = $false
+$script:modalFromUser = $false
+
+function Modal-SetTouched([bool]$v) { $script:modalTouched = $v }
+
+function Show-Modal {
+  param([Parameter(Mandatory)][bool]$fromUser)
+
+  $ov = [System.Windows.Controls.Grid]$script:w.FindName("StartupModalOverlay")
+  if (-not $ov) { return }
+
+  $script:modalFromUser = $fromUser
+  Modal-SetTouched $false
+
+  $cb1 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown1")
+  $cb2 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown2")
+  $cb3 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown3")
+  $btnCancel = [System.Windows.Controls.Button]$script:w.FindName("StartupCancelButton")
+
+  if ($btnCancel) {
+    if ($fromUser) { $btnCancel.Visibility = "Visible" }
+    else { $btnCancel.Visibility = "Collapsed" }
+  }
+
+  if ($cb1) { Set-CbByText -cb $cb1 -t $script:sel.d1; $cb1.Style = $script:w.FindResource("UnifiedComboBoxStyle") }
+  if ($cb2) { Set-CbByText -cb $cb2 -t $script:sel.d2; $cb2.Style = $script:w.FindResource("UnifiedComboBoxStyle") }
+  if ($cb3) { Set-CbByText -cb $cb3 -t $script:sel.d3; $cb3.Style = $script:w.FindResource("UnifiedComboBoxStyle") }
+
+  $ov.Visibility = "Visible"
+}
+
+function Modal-Validate([bool]$applyStyle) {
+  $cb1 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown1")
+  $cb2 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown2")
+  $cb3 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown3")
+
+  $t1 = if ($cb1) { Get-CbText -cb $cb1 } else { "" }
+  $t2 = if ($cb2) { Get-CbText -cb $cb2 } else { "" }
+  $t3 = if ($cb3) { Get-CbText -cb $cb3 } else { "" }
+
+  $ok1 = -not [string]::IsNullOrEmpty($t1)
+  $ok2 = -not [string]::IsNullOrEmpty($t2)
+  $ok3 = -not [string]::IsNullOrEmpty($t3)
+
+  if ($applyStyle) {
+    if ($cb1) { Set-ModalCbStyle -cb $cb1 -ok $ok1 }
+    if ($cb2) { Set-ModalCbStyle -cb $cb2 -ok $ok2 }
+    if ($cb3) { Set-ModalCbStyle -cb $cb3 -ok $ok3 }
+  }
+
+  return @{ ok = ($ok1 -and $ok2 -and $ok3); t1 = $t1; t2 = $t2; t3 = $t3 }
+}
+
+function Init-Modal {
+  $cb1 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown1")
+  $cb2 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown2")
+  $cb3 = [System.Windows.Controls.ComboBox]$script:w.FindName("StartupDropdown3")
+  $btnOk = [System.Windows.Controls.Button]$script:w.FindName("StartupConfirmButton")
+  $btnNg = [System.Windows.Controls.Button]$script:w.FindName("StartupCancelButton")
+
+  $opt2 = @("選択肢1", "選択肢2", "選択肢3", "選択肢4", "選択肢5", "選択肢6", "選択肢7", "選択肢8", "選択肢9", "選択肢10")
+
+  if ($cb1) {
+    Set-CbItems -cb $cb1 -items @("選択肢A", "選択肢B") -keep ""
+    $cb1.Add_SelectionChanged({
+        if (-not $script:modalTouched) { return }
+        $t = Get-CbText -cb $this
+        Set-ModalCbStyle -cb $this -ok:(-not [string]::IsNullOrEmpty($t))
+      }) | Out-Null
+  }
+
+  if ($cb2) {
+    Set-CbItems -cb $cb2 -items $opt2 -keep ""
+    $cb2.Add_SelectionChanged({
+        if (-not $script:modalTouched) { return }
+        $t = Get-CbText -cb $this
+        Set-ModalCbStyle -cb $this -ok:(-not [string]::IsNullOrEmpty($t))
+      }) | Out-Null
+  }
+
+  if ($cb3) {
+    Set-CbItems -cb $cb3 -items @("選択肢A", "選択肢B") -keep ""
+    $cb3.Add_SelectionChanged({
+        if (-not $script:modalTouched) { return }
+        $t = Get-CbText -cb $this
+        Set-ModalCbStyle -cb $this -ok:(-not [string]::IsNullOrEmpty($t))
+      }) | Out-Null
+  }
+
+  if ($btnOk) {
+    $btnOk.Add_Click({
+        Modal-SetTouched $true
+        $r = Modal-Validate -applyStyle:$true
+        if (-not $r.ok) { return }
+        $script:sel.d1 = $r.t1
+        $script:sel.d2 = $r.t2
+        $script:sel.d3 = $r.t3
+        Hide-Modal
+      }) | Out-Null
+  }
+
+  if ($btnNg) {
+    $btnNg.Add_Click({
+        Modal-SetTouched $true
+        $r = Modal-Validate -applyStyle:$true
+        if (-not $r.ok) { return }
+        Hide-Modal
+      }) | Out-Null
   }
 }
 
-$stopwatch = New-Object System.Diagnostics.Stopwatch
-$stopwatchTimer = New-Object System.Windows.Threading.DispatcherTimer
-$stopwatchTimer.Interval = [TimeSpan]::FromMilliseconds(200)
+$sw = New-Object System.Diagnostics.Stopwatch
+$tm = New-Object System.Windows.Threading.DispatcherTimer
+$tm.Interval = [TimeSpan]::FromMilliseconds(200)
 
-$stopwatchTimeTextBlock = [System.Windows.Controls.TextBlock]$mainWindow.FindName("StopwatchTimeTextBlock")
-$startStopButton = [System.Windows.Controls.Button]$mainWindow.FindName("StartStopButton")
-$resetButton = [System.Windows.Controls.Button]$mainWindow.FindName("ResetButton")
-$clearButton = [System.Windows.Controls.Button]$mainWindow.FindName("ClearButton")
+$tSw = [System.Windows.Controls.TextBlock]$script:w.FindName("StopwatchTimeTextBlock")
+$bSw = [System.Windows.Controls.Button]$script:w.FindName("StartStopButton")
+$bRs = [System.Windows.Controls.Button]$script:w.FindName("ResetButton")
+$bCl = [System.Windows.Controls.Button]$script:w.FindName("ClearButton")
 
-$statusChipContainer = [System.Windows.Controls.Border]$mainWindow.FindName("StatusChipContainer")
-$statusChipTextBlock = [System.Windows.Controls.TextBlock]$mainWindow.FindName("StatusChipTextBlock")
-$mainTabControl = [System.Windows.Controls.TabControl]$mainWindow.FindName("MainTabControl")
+$chipBd = [System.Windows.Controls.Border]$script:w.FindName("StatusChipContainer")
+$chipTx = [System.Windows.Controls.TextBlock]$script:w.FindName("StatusChipTextBlock")
+$tabs = [System.Windows.Controls.TabControl]$script:w.FindName("MainTabControl")
 
-$hamburgerButton = [System.Windows.Controls.Button]$mainWindow.FindName("HamburgerButton")
-$drawerOverlay = [System.Windows.Controls.Grid]$mainWindow.FindName("DrawerOverlay")
-$drawerPanel = [System.Windows.Controls.Border]$mainWindow.FindName("DrawerPanel")
-$drawerTranslateTransform = [System.Windows.Media.TranslateTransform]$mainWindow.FindName("DrawerTranslateTransform")
+$btnHam = [System.Windows.Controls.Button]$script:w.FindName("HamburgerButton")
+$btnUsr = [System.Windows.Controls.Button]$script:w.FindName("UserButton")
+$imgUsr = [System.Windows.Controls.Image]$script:w.FindName("UserIconImage")
 
-$drawerCloseButton = [System.Windows.Controls.Button]$mainWindow.FindName("DrawerCloseButton")
-$drawerItem1Button = [System.Windows.Controls.Button]$mainWindow.FindName("DrawerItem1Button")
-$drawerItem2Button = [System.Windows.Controls.Button]$mainWindow.FindName("DrawerItem2Button")
-$drawerItem3Button = [System.Windows.Controls.Button]$mainWindow.FindName("DrawerItem3Button")
+$ovDr = [System.Windows.Controls.Grid]$script:w.FindName("DrawerOverlay")
+$pnDr = [System.Windows.Controls.Border]$script:w.FindName("DrawerPanel")
+$trDr = [System.Windows.Media.TranslateTransform]$script:w.FindName("DrawerTranslateTransform")
 
-$headerTitleTextBlock = [System.Windows.Controls.TextBlock]$mainWindow.FindName("HeaderTitleTextBlock")
-$item1Screen = [System.Windows.Controls.Grid]$mainWindow.FindName("Item1Screen")
-$placeholderScreen = [System.Windows.Controls.Grid]$mainWindow.FindName("PlaceholderScreen")
-$placeholderTextBlock = [System.Windows.Controls.TextBlock]$mainWindow.FindName("PlaceholderTextBlock")
+$bDrX = [System.Windows.Controls.Button]$script:w.FindName("DrawerCloseButton")
+$bD1 = [System.Windows.Controls.Button]$script:w.FindName("DrawerItem1Button")
+$bD2 = [System.Windows.Controls.Button]$script:w.FindName("DrawerItem2Button")
+$bD3 = [System.Windows.Controls.Button]$script:w.FindName("DrawerItem3Button")
 
-function Set-StatusChipState {
-  param(
-    [Parameter(Mandatory)]
-    [ValidateSet("Stopped", "Working", "Warning", "Danger")]
-    [string] $state
-  )
+$ttl = [System.Windows.Controls.TextBlock]$script:w.FindName("HeaderTitleTextBlock")
+$scr1 = [System.Windows.Controls.Grid]$script:w.FindName("Item1Screen")
+$scrP = [System.Windows.Controls.Grid]$script:w.FindName("PlaceholderScreen")
+$txtP = [System.Windows.Controls.TextBlock]$script:w.FindName("PlaceholderTextBlock")
 
-  switch ($state) {
-    "Stopped" {
-      $statusChipTextBlock.Text = "待機中"
-      $statusChipContainer.Background = $mainWindow.FindResource("ChipStoppedBackgroundBrush")
-      $statusChipTextBlock.Foreground = $mainWindow.FindResource("ChipStoppedForegroundBrush")
-    }
-    "Working" {
-      $statusChipTextBlock.Text = "対応中"
-      $statusChipContainer.Background = $mainWindow.FindResource("ChipBlueBackgroundBrush")
-      $statusChipTextBlock.Foreground = $mainWindow.FindResource("ChipBlueForegroundBrush")
-    }
-    "Warning" {
-      $statusChipTextBlock.Text = "保留延伸"
-      $statusChipContainer.Background = $mainWindow.FindResource("ChipYellowBackgroundBrush")
-      $statusChipTextBlock.Foreground = $mainWindow.FindResource("ChipYellowForegroundBrush")
-    }
-    "Danger" {
-      $statusChipTextBlock.Text = "エスカレ要"
-      $statusChipContainer.Background = $mainWindow.FindResource("ChipRedBackgroundBrush")
-      $statusChipTextBlock.Foreground = $mainWindow.FindResource("ChipRedForegroundBrush")
-    }
+function Set-Chip([ValidateSet("Stopped", "Working", "Warning", "Danger")][string]$s) {
+  switch ($s) {
+    "Stopped" { $chipTx.Text = "待機中"; $chipBd.Background = $script:w.FindResource("ChipStoppedBackgroundBrush"); $chipTx.Foreground = $script:w.FindResource("ChipStoppedForegroundBrush") }
+    "Working" { $chipTx.Text = "対応中"; $chipBd.Background = $script:w.FindResource("ChipBlueBackgroundBrush"); $chipTx.Foreground = $script:w.FindResource("ChipBlueForegroundBrush") }
+    "Warning" { $chipTx.Text = "保留延伸"; $chipBd.Background = $script:w.FindResource("ChipYellowBackgroundBrush"); $chipTx.Foreground = $script:w.FindResource("ChipYellowForegroundBrush") }
+    "Danger" { $chipTx.Text = "エスカレ要"; $chipBd.Background = $script:w.FindResource("ChipRedBackgroundBrush"); $chipTx.Foreground = $script:w.FindResource("ChipRedForegroundBrush") }
   }
 }
 
-function Update-StatusChipByElapsedTime {
-  if (-not $stopwatch.IsRunning) { Set-StatusChipState -state "Stopped"; return }
-
-  $elapsedSeconds = [int][Math]::Floor($stopwatch.Elapsed.TotalSeconds)
-  if ($elapsedSeconds -ge 15) { Set-StatusChipState -state "Danger"; return }
-  if ($elapsedSeconds -ge 10) { Set-StatusChipState -state "Warning"; return }
-  Set-StatusChipState -state "Working"
+function Upd-Chip {
+  if (-not $sw.IsRunning) { Set-Chip "Stopped"; return }
+  $sec = [int][Math]::Floor($sw.Elapsed.TotalSeconds)
+  if ($sec -ge 15) { Set-Chip "Danger"; return }
+  if ($sec -ge 10) { Set-Chip "Warning"; return }
+  Set-Chip "Working"
 }
 
-function Update-StopwatchButtons {
-  if ($stopwatch.IsRunning) { $startStopButton.Content = "停止" } else { $startStopButton.Content = "開始" }
+function Upd-SwBtn { if ($sw.IsRunning) { $bSw.Content = "停止" } else { $bSw.Content = "開始" } }
+
+function Reset-Sw {
+  $tm.Stop()
+  $sw.Reset()
+  $tSw.Text = (Fmt-Time -ts $sw.Elapsed)
+  Set-Chip "Stopped"
+  Upd-SwBtn
 }
 
-function Reset-StopwatchToStoppedState {
-  try { $stopwatchTimer.Stop() } catch {}
-  try { $stopwatch.Reset() } catch {}
-
-  $stopwatchTimeTextBlock.Text = (Format-ElapsedTime -elapsedTime $stopwatch.Elapsed)
-  Set-StatusChipState -state "Stopped"
-  Update-StopwatchButtons
-}
-
-$stopwatchTimer.Add_Tick({
-    $stopwatchTimeTextBlock.Text = (Format-ElapsedTime -elapsedTime $stopwatch.Elapsed)
-    Update-StatusChipByElapsedTime
+$tm.Add_Tick({
+    $tSw.Text = (Fmt-Time -ts $sw.Elapsed)
+    Upd-Chip
   }) | Out-Null
 
-$startStopButton.Add_Click({
-    if ($stopwatch.IsRunning) {
-      $stopwatch.Stop()
-      $stopwatchTimer.Stop()
-      Set-StatusChipState -state "Stopped"
-    }
-    else {
-      $stopwatch.Start()
-      $stopwatchTimer.Start()
-      Update-StatusChipByElapsedTime
-    }
-
-    $stopwatchTimeTextBlock.Text = (Format-ElapsedTime -elapsedTime $stopwatch.Elapsed)
-    Update-StopwatchButtons
+$bSw.Add_Click({
+    if ($sw.IsRunning) { $sw.Stop(); $tm.Stop(); Set-Chip "Stopped" }
+    else { $sw.Start(); $tm.Start(); Upd-Chip }
+    $tSw.Text = (Fmt-Time -ts $sw.Elapsed)
+    Upd-SwBtn
   }) | Out-Null
 
-$resetButton.Add_Click({ Reset-StopwatchToStoppedState }) | Out-Null
+$bRs.Add_Click({ Reset-Sw }) | Out-Null
 
-$mainTabControl.Add_SelectionChanged({
-    if ($script:IsBulkUpdateInProgress) { return }
-
-    $selectedHeader = ""
-    try { $selectedHeader = [string]$mainTabControl.SelectedItem.Header } catch {}
-
-    $targetControlName = $null
-    switch ($selectedHeader) {
-      "Tab1" { $targetControlName = "FirstTabDropdown1" }
-      "Tab2" { $targetControlName = "SecondTabDropdown1Special" }
-      "Tab3" { $targetControlName = $null }
+$tabs.Add_SelectionChanged({
+    if ($script:bulk) { return }
+    $h = ""
+    try { $h = [string]$tabs.SelectedItem.Header } catch {}
+    $t = $null
+    switch ($h) {
+      "Tab1" { $t = "FirstTabDropdown1" }
+      "Tab2" { $t = "SecondTabDropdown1Special" }
+      "Tab3" { $t = $null }
     }
-
-    if ($targetControlName) {
-      $mainWindow.Dispatcher.BeginInvoke([Action] { try { ($mainWindow.FindName($targetControlName)).Focus() | Out-Null } catch {} }) | Out-Null
-    }
+    if ($t) { $script:w.Dispatcher.BeginInvoke([Action] { try { ($script:w.FindName($t)).Focus() | Out-Null } catch {} }) | Out-Null }
   }) | Out-Null
 
-foreach ($definition in $formFieldDefinitions) {
-  $control = $mainWindow.FindName($definition.ControlName)
-  if ($definition.ControlType -eq "ComboBox") {
-    $control.Add_SelectionChanged({ Sync-StateFromUserInterface -window $mainWindow }) | Out-Null
-  }
-  else {
-    $control.Add_TextChanged({ Sync-StateFromUserInterface -window $mainWindow }) | Out-Null
-  }
+foreach ($d in $defs) {
+  $c = $script:w.FindName($d.n)
+  if ($d.t -eq "cb") { $c.Add_SelectionChanged({ Sync-St -w $script:w }) | Out-Null }
+  else { $c.Add_TextChanged({ Sync-St -w $script:w }) | Out-Null }
+  Attach-EnterNext -c $c
 }
 
-foreach ($definition in $formFieldDefinitions) {
-  Attach-EnterKeyToMoveNext -control ($mainWindow.FindName($definition.ControlName))
-}
-
-$secondTabSpecialDropdown = [System.Windows.Controls.ComboBox]$mainWindow.FindName("SecondTabDropdown1Special")
-$secondTabSpecialDropdown.Add_SelectionChanged({
-    if ($script:IsBulkUpdateInProgress) { return }
-    Update-SpecialAddressTextBoxVisibility -window $mainWindow
-    Sync-StateFromUserInterface -window $mainWindow
+$cbSpec = [System.Windows.Controls.ComboBox]$script:w.FindName("SecondTabDropdown1Special")
+$cbSpec.Add_SelectionChanged({
+    if ($script:bulk) { return }
+    Upd-SpecialTb -w $script:w
+    Sync-St -w $script:w
   }) | Out-Null
 
-$clearButton.Add_Click({
-    try { [System.Windows.Clipboard]::Clear() } catch {}
-
-    Clear-AllInputs -window $mainWindow
-    Reset-StopwatchToStoppedState
-
-    try { $mainTabControl.SelectedIndex = 0 } catch {}
-    $mainWindow.Dispatcher.BeginInvoke([Action] { try { ($mainWindow.FindName("FirstTabDropdown1")).Focus() | Out-Null } catch {} }) | Out-Null
+$bCl.Add_Click({
+    [System.Windows.Clipboard]::Clear()
+    Clear-All -w $script:w
+    Reset-Sw
+    try { $tabs.SelectedIndex = 0 } catch {}
+    $script:w.Dispatcher.BeginInvoke([Action] { try { ($script:w.FindName("FirstTabDropdown1")).Focus() | Out-Null } catch {} }) | Out-Null
   }) | Out-Null
 
 function Show-Drawer {
-  $drawerOverlay.Visibility = "Visible"
-
-  $openAnimation = New-Object System.Windows.Media.Animation.DoubleAnimation
-  $openAnimation.From = -250
-  $openAnimation.To = 0
-  $openAnimation.Duration = [TimeSpan]::FromMilliseconds(180)
-  $openAnimation.EasingFunction = New-Object System.Windows.Media.Animation.CubicEase
-  $openAnimation.EasingFunction.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
-
-  $drawerTranslateTransform.BeginAnimation([System.Windows.Media.TranslateTransform]::XProperty, $openAnimation)
+  $ovDr.Visibility = "Visible"
+  $a = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $a.From = -250; $a.To = 0; $a.Duration = [TimeSpan]::FromMilliseconds(180)
+  $a.EasingFunction = New-Object System.Windows.Media.Animation.CubicEase
+  $a.EasingFunction.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseOut
+  $trDr.BeginAnimation([System.Windows.Media.TranslateTransform]::XProperty, $a)
 }
 
 function Hide-Drawer {
-  $closeAnimation = New-Object System.Windows.Media.Animation.DoubleAnimation
-  $closeAnimation.From = $drawerTranslateTransform.X
-  $closeAnimation.To = -250
-  $closeAnimation.Duration = [TimeSpan]::FromMilliseconds(160)
-  $closeAnimation.EasingFunction = New-Object System.Windows.Media.Animation.CubicEase
-  $closeAnimation.EasingFunction.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseIn
-
-  $closeAnimation.Add_Completed({ $drawerOverlay.Visibility = "Collapsed" }) | Out-Null
-  $drawerTranslateTransform.BeginAnimation([System.Windows.Media.TranslateTransform]::XProperty, $closeAnimation)
+  $a = New-Object System.Windows.Media.Animation.DoubleAnimation
+  $a.From = $trDr.X; $a.To = -250; $a.Duration = [TimeSpan]::FromMilliseconds(160)
+  $a.EasingFunction = New-Object System.Windows.Media.Animation.CubicEase
+  $a.EasingFunction.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseIn
+  $a.Add_Completed({ $ovDr.Visibility = "Collapsed" }) | Out-Null
+  $trDr.BeginAnimation([System.Windows.Media.TranslateTransform]::XProperty, $a)
 }
 
-function Show-Item1Screen {
-  $headerTitleTextBlock.Text = "Item1"
-  $placeholderScreen.Visibility = "Collapsed"
-  $item1Screen.Visibility = "Visible"
+function Show-Item1 { $ttl.Text = "Item1"; $scrP.Visibility = "Collapsed"; $scr1.Visibility = "Visible" }
+function Show-Ph([Parameter(Mandatory)][string]$t) { $ttl.Text = $t; $txtP.Text = "$t`n準備中"; $scr1.Visibility = "Collapsed"; $scrP.Visibility = "Visible" }
+
+$btnHam.Add_Click({ Show-Drawer }) | Out-Null
+$bDrX.Add_Click({ Hide-Drawer }) | Out-Null
+
+$ovDr.Add_MouseDown({
+    if ($_.OriginalSource -eq $ovDr) { Hide-Drawer; $_.Handled = $true }
+  }) | Out-Null
+
+$pnDr.Add_MouseDown({ $_.Handled = $true }) | Out-Null
+
+$bD1.Add_Click({ Show-Item1; Hide-Drawer }) | Out-Null
+$bD2.Add_Click({ Show-Ph -t "Item2"; Hide-Drawer }) | Out-Null
+$bD3.Add_Click({ Show-Ph -t "Item3"; Hide-Drawer }) | Out-Null
+
+function Set-UsrIcon {
+  if (-not $imgUsr) { return }
+  $p = Join-Path $script:dir "images\account_circle.png"
+  if (-not (Test-Path $p)) { return }
+  $bmp = New-Object System.Windows.Media.Imaging.BitmapImage
+  $bmp.BeginInit()
+  $bmp.UriSource = New-Object System.Uri($p, [System.UriKind]::Absolute)
+  $bmp.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+  $bmp.EndInit()
+  $bmp.Freeze()
+  $imgUsr.Source = $bmp
 }
 
-function Show-PlaceholderScreen {
-  param([Parameter(Mandatory)] [string] $titleText)
+if ($btnUsr) { $btnUsr.Add_Click({ Show-Modal -fromUser:$true }) | Out-Null }
 
-  $headerTitleTextBlock.Text = $titleText
-  $placeholderTextBlock.Text = "$titleText`n準備中"
-  $item1Screen.Visibility = "Collapsed"
-  $placeholderScreen.Visibility = "Visible"
-}
+Init-Modal
+Apply-Opts -w $script:w
+Sync-Ui -w $script:w
 
-$hamburgerButton.Add_Click({ Show-Drawer }) | Out-Null
-$drawerCloseButton.Add_Click({ Hide-Drawer }) | Out-Null
+Upd-SwBtn
+$tSw.Text = (Fmt-Time -ts $sw.Elapsed)
+Set-Chip "Stopped"
 
-$drawerOverlay.Add_MouseDown({
-    if ($_.OriginalSource -eq $drawerOverlay) {
-      Hide-Drawer
-      $_.Handled = $true
-    }
+$script:w.Add_Loaded({
+    Set-BottomLeft -w $script:w
+    $ovDr.Visibility = "Collapsed"
+    $trDr.X = -250
+    Show-Item1
+    Set-UsrIcon
+    Show-Modal -fromUser:$false
   }) | Out-Null
 
-$drawerPanel.Add_MouseDown({ $_.Handled = $true }) | Out-Null
-
-$drawerItem1Button.Add_Click({ Show-Item1Screen; Hide-Drawer }) | Out-Null
-$drawerItem2Button.Add_Click({ Show-PlaceholderScreen -titleText "Item2"; Hide-Drawer }) | Out-Null
-$drawerItem3Button.Add_Click({ Show-PlaceholderScreen -titleText "Item3"; Hide-Drawer }) | Out-Null
-
-Update-StopwatchButtons
-$stopwatchTimeTextBlock.Text = (Format-ElapsedTime -elapsedTime $stopwatch.Elapsed)
-Set-StatusChipState -state "Stopped"
-Sync-UserInterfaceFromState -window $mainWindow
-
-$mainWindow.Add_Loaded({
-    try { Set-WindowBottomLeft -window $mainWindow } catch {}
-    try { $drawerOverlay.Visibility = "Collapsed" } catch {}
-    try { $drawerTranslateTransform.X = -250 } catch {}
-    try { Show-Item1Screen } catch {}
+$script:w.Add_Closing({
+    try { Sync-St -w $script:w } catch {}
+    $tm.Stop()
+    $sw.Stop()
   }) | Out-Null
 
-$mainWindow.Add_Closing({
-    try { Sync-StateFromUserInterface -window $mainWindow } catch {}
-    try { $stopwatchTimer.Stop() } catch {}
-    try { $stopwatch.Stop() } catch {}
-  }) | Out-Null
-
-$null = $mainWindow.ShowDialog()
+$null = $script:w.ShowDialog()
